@@ -6,6 +6,8 @@ import datetime
 import random
 from collections import namedtuple
 
+import requests
+
 import config
 
 
@@ -26,6 +28,7 @@ class Bot:
         self.irc_server = 'irc.chat.twitch.tv'
         self.irc_port = 6697
         self.oauth_token = config.OAUTH_TOKEN
+        self.openweather_api_key = config.OPENWEATHER_API_KEY
         self.username = 'squishymcbotty'
         self.command_prefix = '!'
         self.channels = ['clumsycomputer']
@@ -49,10 +52,12 @@ class Bot:
             'delcmd': self.delete_template_command,
             'addquote': self.add_quote,
             'quote': self.reply_with_quote,
+            'weather': self.get_weather,
         }
         self.modonly_commands = [
-            # 'addcmd', 'editcmd', 'delcmd',
+            'addcmd', 'editcmd', 'delcmd',
             'addquote', 'noot',
+            'weather',
         ]
 
     def init(self):
@@ -307,6 +312,15 @@ class Bot:
 
         text = f'Quote {quote_idx}: {quote}'
         self.send_privmsg(message.channel, text)
+
+    def get_weather(self, message):
+        city_name = 'Basel'
+        url = f'https://api.openweathermap.org/data/2.5/weather' \
+            '?q={city_name}' \
+            '&appid={self.openweather_api_key}'
+        r = requests.get(url)
+        weather_data = r.json()
+        print(weather_data)
 
     def is_mod(self, message):
         return 'broadcaster' in message.tags['badges'] or \
