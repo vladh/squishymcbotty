@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import socket
+import ssl
 import json
 import datetime
 from collections import namedtuple
@@ -9,7 +10,7 @@ import config
 
 Message = namedtuple(
     'Message',
-    'prefix user channel irc_command irc_args text text_command text_args',
+    'prefix user channel irc_command irc_args text text_command text_args tags',
 )
 
 
@@ -21,17 +22,21 @@ def remove_prefix(string, prefix):
 
 class Bot:
     def __init__(self):
-        self.irc_server = 'irc.twitch.tv'
-        self.irc_port = 6667
+        self.irc_server = 'irc.chat.twitch.tv'
+        self.irc_port = 6697
         self.oauth_token = config.OAUTH_TOKEN
         self.username = 'squishymcbotty'
         self.command_prefix = '!'
         self.channels = ['clumsycomputer']
-        self.template_commands_filename = 'data/template_commands.json'
+        self.caps = [':twitch.tv/tags']
         self.state_filename = 'data/state.json'
         self.verbose = True
         self.state = {}
-        self.template_commands = {}
+        self.state_schema = {
+            'template_commands': {},
+            'bigbrain_counter': 0,
+            'smallbrain_counter': 0,
+        }
         self.custom_commands = {
             'date': self.reply_with_date,
             'bigbrain': self.increment_bigbrain,
@@ -41,27 +46,33 @@ class Bot:
             'editcmd': self.edit_template_command,
             'delcmd': self.delete_template_command,
         }
+        self.modonly_commands = [
+            # 'addcmd', 'editcmd', 'delcmd',
+            'noot',
+        ]
 
     def init(self):
         self.read_state()
-        self.read_template_commands()
         self.connect()
+
+    def ensure_state_schema(self):
+        is_dirty = False
+        for key in self.state_schema:
+            if key not in self.state:
+                is_dirty = True
+                self.state[key] = self.state_schema[key]
+        return is_dirty
 
     def read_state(self):
         with open(self.state_filename, 'r') as file:
             self.state = json.load(file)
+        is_dirty = self.ensure_state_schema()
+        if is_dirty:
+            self.write_state()
 
     def write_state(self):
         with open(self.state_filename, 'w') as file:
             json.dump(self.state, file)
-
-    def read_template_commands(self):
-        with open(self.template_commands_filename, 'r') as file:
-            self.template_commands = json.load(file)
-
-    def write_template_commands(self):
-        with open(self.template_commands_filename, 'w') as file:
-            json.dump(self.template_commands, file)
 
     def send_privmsg(self, channel, text):
         self.send_command(f'PRIVMSG #{channel} :{text}')
@@ -72,10 +83,12 @@ class Bot:
         self.irc.send((command + '\r\n').encode())
 
     def connect(self):
-        self.irc = socket.socket()
+        self.irc = ssl.wrap_socket(socket.socket())
         self.irc.connect((self.irc_server, self.irc_port))
         self.send_command(f'PASS {self.oauth_token}')
         self.send_command(f'NICK {self.username}')
+        if len(self.caps) > 0:
+            self.send_command('CAP REQ {self.caps.join(" ")}')
         for channel in self.channels:
             self.send_command(f'JOIN #{channel}')
             self.send_privmsg(channel, 'Hey there!')
@@ -100,6 +113,20 @@ class Bot:
         text_args = None
         irc_command = None
         irc_args = None
+        tags = None
+
+        if parts[0].startswith('@'):
+            tag_text = remove_prefix(parts[0], '@')
+            tag_parts = tag_text.split(';')
+            split_tag_parts = [
+                tag_part.split('=')
+                for tag_part in tag_parts
+            ]
+            tags = {
+                tag_name: tag_value
+                for tag_name, tag_value in split_tag_parts
+            }
+            parts = parts[1:]
 
         if parts[0].startswith(':'):
             prefix = remove_prefix(parts[0], ':')
@@ -114,8 +141,9 @@ class Bot:
             text_parts = parts[text_start:]
             text_parts[0] = text_parts[0][1:]
             text = ' '.join(text_parts)
-            text_command = remove_prefix(text_parts[0], self.command_prefix)
-            text_args = text_parts[1:]
+            if text_parts[0].startswith(self.command_prefix):
+                text_command = remove_prefix(text_parts[0], self.command_prefix)
+                text_args = text_parts[1:]
             parts = parts[:text_start]
 
         irc_command = parts[0]
@@ -137,6 +165,7 @@ class Bot:
             text_args=text_args,
             irc_command=irc_command,
             irc_args=irc_args,
+            tags=tags,
         )
 
         return message
@@ -145,7 +174,7 @@ class Bot:
         try:
             text = template.format(**{'message': message})
             self.send_privmsg(message.channel, text)
-        except IndexError as e:
+        except IndexError:
             text = f"@{message.user} Your command is missing some arguments!"
             self.send_privmsg(message.channel, text)
         except Exception as e:
@@ -162,6 +191,9 @@ class Bot:
         self.send_privmsg(message.channel, text)
 
     def add_template_command(self, message, force=False):
+        if '/' in message.text:
+            return
+
         if len(message.text_args) < 2:
             text = f"@{message.user} Usage: !addcmd <name> <template>"
             self.send_privmsg(message.channel, text)
@@ -170,13 +202,13 @@ class Bot:
         command_name = remove_prefix(message.text_args[0], self.command_prefix)
         template = ' '.join(message.text_args[1:])
 
-        if command_name in self.template_commands and not force:
+        if command_name in self.state['template_commands'] and not force:
             text = f"@{message.user} Command {command_name} already exists, use {self.command_prefix}editcmd if you'd like to edit it."
             self.send_privmsg(message.channel, text)
             return
 
-        self.template_commands[command_name] = template
-        self.write_template_commands()
+        self.state['template_commands'][command_name] = template
+        self.write_state()
         text = f'@{message.user} Command {command_name} added!'
         self.send_privmsg(message.channel, text)
 
@@ -194,15 +226,18 @@ class Bot:
             for arg in message.text_args
         ]
 
-        if not all([item in valid for item in input]):
+        if not all([
+            command_name in self.state['template_commands']
+            for command_name in command_names
+        ]):
             text = f"@{message.user} One of the commands you wrote doesn't exist!"
             self.send_privmsg(message.channel, text)
             return
 
         for command_name in command_names:
-            del self.template_commands[command_name]
+            del self.state['template_commands'][command_name]
 
-        self.write_template_commands()
+        self.write_state()
         if len(command_names) > 1:
             text = f'@{message.user} Commands deleted! {" ".join(command_names)}'
         else:
@@ -210,7 +245,7 @@ class Bot:
         self.send_privmsg(message.channel, text)
 
     def list_commands(self, message):
-        all_command_names = list(self.template_commands.keys()) + \
+        all_command_names = list(self.state['template_commands'].keys()) + \
             list(self.custom_commands.keys())
         all_command_names = [
             self.command_prefix + command_name
@@ -220,20 +255,20 @@ class Bot:
         self.send_privmsg(message.channel, text)
 
     def increment_bigbrain(self, message):
-        if 'bigbrain_counter' not in self.state:
-            self.state['bigbrain_counter'] = 0
         self.state['bigbrain_counter'] += 1
         text = f'Big brain moments: {self.state["bigbrain_counter"]}'
         self.send_privmsg(message.channel, text)
         self.write_state()
 
     def increment_smallbrain(self, message):
-        if 'smallbrain_counter' not in self.state:
-            self.state['smallbrain_counter'] = 0
         self.state['smallbrain_counter'] += 1
         text = f'Small brain moments: {self.state["smallbrain_counter"]}'
         self.send_privmsg(message.channel, text)
         self.write_state()
+
+    def is_mod(self, message):
+        return 'broadcaster' in message.tags['badges'] or \
+            message.tags['mod'] == '1'
 
     def handle_message(self, received_msg):
         if len(received_msg) == 0:
@@ -241,19 +276,20 @@ class Bot:
 
         message = self.parse_message(received_msg)
         if self.verbose:
-            print(f'> {received_msg}')
-            # print(f'> {message}')
+            print(f'> ({message.irc_command} {message.irc_args}) @{message.user}: {message.text}')
 
         if message.irc_command == 'PING':
             self.send_command('PONG :tmi.twitch.tv')
 
         if message.irc_command == 'PRIVMSG':
+            if message.text_command in self.modonly_commands and not self.is_mod(message):
+                return
             if message.text_command in self.custom_commands:
                 self.custom_commands[message.text_command](message)
-            elif message.text_command in self.template_commands:
+            elif message.text_command in self.state['template_commands']:
                 self.handle_template_command(
                     message,
-                    self.template_commands[message.text_command],
+                    self.state['template_commands'][message.text_command],
                 )
 
     def loop_for_messages(self):
