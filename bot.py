@@ -3,6 +3,7 @@ import socket
 import ssl
 import json
 import datetime
+import random
 from collections import namedtuple
 
 import config
@@ -36,6 +37,7 @@ class Bot:
             'template_commands': {},
             'bigbrain_counter': 0,
             'smallbrain_counter': 0,
+            'quotes': [],
         }
         self.custom_commands = {
             'date': self.reply_with_date,
@@ -45,10 +47,12 @@ class Bot:
             'addcmd': self.add_template_command,
             'editcmd': self.edit_template_command,
             'delcmd': self.delete_template_command,
+            'addquote': self.add_quote,
+            'quote': self.reply_with_quote,
         }
         self.modonly_commands = [
             # 'addcmd', 'editcmd', 'delcmd',
-            'noot',
+            'addquote', 'noot',
         ]
 
     def init(self):
@@ -75,6 +79,8 @@ class Bot:
             json.dump(self.state, file)
 
     def send_privmsg(self, channel, text):
+        if text.startswith('/'):
+            return
         self.send_command(f'PRIVMSG #{channel} :{text}')
 
     def send_command(self, command):
@@ -88,7 +94,7 @@ class Bot:
         self.send_command(f'PASS {self.oauth_token}')
         self.send_command(f'NICK {self.username}')
         if len(self.caps) > 0:
-            self.send_command('CAP REQ {self.caps.join(" ")}')
+            self.send_command(f'CAP REQ {" ".join(self.caps)}')
         for channel in self.channels:
             self.send_command(f'JOIN #{channel}')
             self.send_privmsg(channel, 'Hey there!')
@@ -191,9 +197,6 @@ class Bot:
         self.send_privmsg(message.channel, text)
 
     def add_template_command(self, message, force=False):
-        if '/' in message.text:
-            return
-
         if len(message.text_args) < 2:
             text = f"@{message.user} Usage: !addcmd <name> <template>"
             self.send_privmsg(message.channel, text)
@@ -202,8 +205,15 @@ class Bot:
         command_name = remove_prefix(message.text_args[0], self.command_prefix)
         template = ' '.join(message.text_args[1:])
 
+        if command_name in self.custom_commands:
+            text = f"@{message.user} Can't add command {command_name} as it is already a " \
+                "built-in command."
+            self.send_privmsg(message.channel, text)
+            return
+
         if command_name in self.state['template_commands'] and not force:
-            text = f"@{message.user} Command {command_name} already exists, use {self.command_prefix}editcmd if you'd like to edit it."
+            text = f"@{message.user} Command {command_name} already exists, use " \
+                "{self.command_prefix}editcmd if you'd like to edit it."
             self.send_privmsg(message.channel, text)
             return
 
@@ -265,6 +275,38 @@ class Bot:
         text = f'Small brain moments: {self.state["smallbrain_counter"]}'
         self.send_privmsg(message.channel, text)
         self.write_state()
+
+    def add_quote(self, message):
+        if len(message.text_args) < 2:
+            text = f"@{message.user} Usage: !addquote <quote>"
+            self.send_privmsg(message.channel, text)
+            return
+
+        quote = ' '.join(message.text_args)
+        quote_idx = len(self.state['quotes'])
+
+        self.state['quotes'].append(quote)
+        self.write_state()
+        text = f'@{message.user} Quote {quote_idx} added!'
+        self.send_privmsg(message.channel, text)
+
+    def reply_with_quote(self, message):
+        if len(self.state['quotes']) == 0:
+            return
+
+        if (
+            len(message.text_args) > 0 and
+            message.text_args[0].isnumeric() and
+            int(message.text_args[0]) < len(self.state['quotes'])
+        ):
+            quote_idx = int(message.text_args[0])
+        else:
+            quote_idx = random.randrange(0, len(self.state['quotes']))
+
+        quote = self.state['quotes'][quote_idx]
+
+        text = f'Quote {quote_idx}: {quote}'
+        self.send_privmsg(message.channel, text)
 
     def is_mod(self, message):
         return 'broadcaster' in message.tags['badges'] or \
