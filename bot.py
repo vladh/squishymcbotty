@@ -212,13 +212,13 @@ class Bot:
 
         if command_name in self.custom_commands:
             text = f"@{message.user} Can't add command {command_name} as it is already a " \
-                "built-in command."
+                f"built-in command."
             self.send_privmsg(message.channel, text)
             return
 
         if command_name in self.state['template_commands'] and not force:
             text = f"@{message.user} Command {command_name} already exists, use " \
-                "{self.command_prefix}editcmd if you'd like to edit it."
+                f"{self.command_prefix}editcmd if you'd like to edit it."
             self.send_privmsg(message.channel, text)
             return
 
@@ -316,8 +316,8 @@ class Bot:
     def get_weather(self, message):
         city_name = 'Basel'
         url = f'https://api.openweathermap.org/data/2.5/weather' \
-            '?q={city_name}' \
-            '&appid={self.openweather_api_key}'
+            f'?q={city_name}' \
+            f'&appid={self.openweather_api_key}'
         r = requests.get(url)
         weather_data = r.json()
         print(weather_data)
