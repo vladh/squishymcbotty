@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+import traceback
 import socket
 import ssl
 import json
 import datetime
 import random
 from collections import namedtuple
+from pprint import pprint
 
 import requests
 
@@ -57,7 +59,6 @@ class Bot:
         self.modonly_commands = [
             'addcmd', 'editcmd', 'delcmd',
             'addquote', 'noot',
-            'weather',
         ]
 
     def init(self):
@@ -188,13 +189,13 @@ class Bot:
         except IndexError:
             text = f"@{message.user} Your command is missing some arguments!"
             self.send_privmsg(message.channel, text)
-        except Exception as e:
+        except Exception:
             # NOTE: Something went wrong here, but as this is a template,
             # things can break, so we'll just print a message and move
             # on. Maybe a better solution to this in the future would be
             # good.
             print('Error while handling template command.', template)
-            print(e)
+            traceback.print_exc()
 
     def reply_with_date(self, message):
         formatted_date = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
@@ -314,13 +315,30 @@ class Bot:
         self.send_privmsg(message.channel, text)
 
     def get_weather(self, message):
-        city_name = 'Basel'
-        url = f'https://api.openweathermap.org/data/2.5/weather' \
-            f'?q={city_name}' \
-            f'&appid={self.openweather_api_key}'
-        r = requests.get(url)
-        weather_data = r.json()
-        print(weather_data)
+        try:
+            city_name = ' '.join(message.text_args)
+            url = f'https://api.openweathermap.org/data/2.5/weather' \
+                f'?q={city_name}' \
+                f'&appid={self.openweather_api_key}' \
+                f'&units=metric'
+            r = requests.get(url)
+            weather_data = r.json()
+
+            if weather_data['cod'] != 200:
+                text = f'Error while getting weather! {weather_data["message"]}'
+                self.send_privmsg(message.channel, text)
+                return
+
+            text = f'{weather_data["name"]}, {weather_data["sys"]["country"]}: ' \
+                f'{weather_data["weather"][0]["description"]}, ' \
+                f'{round(weather_data["main"]["temp"])}C, ' \
+                f'feels like {round(weather_data["main"]["feels_like"])}C, ' \
+                f'{weather_data["main"]["humidity"]}% humidity, ' \
+                f'wind speed {weather_data["wind"]["speed"]}m/s'
+            self.send_privmsg(message.channel, text)
+        except Exception:
+            print('Error while getting weather!')
+            traceback.print_exc()
 
     def is_mod(self, message):
         return 'broadcaster' in message.tags['badges'] or \

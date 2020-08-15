@@ -20,6 +20,7 @@ and [twitch.tv/vladh](https://twitch.tv/vladh), coded live on the clumsy compute
   - [x] `increment_doggo`
 - Extra
   - [x] Quotes
+  - [ ] Type hints
   - [ ] Weather
   - [ ] Per-channel state separation
   - [ ] Keywords
