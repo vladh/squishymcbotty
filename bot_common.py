@@ -5,7 +5,6 @@ import traceback
 import requests
 
 import config
-from bot import Bot
 from util import remove_prefix
 
 
@@ -80,25 +79,23 @@ def list_commands(self, message):
     all_command_names = list(self.state['template_commands'].keys()) + \
         list(self.custom_commands.keys())
     all_command_names = [
-        self.command_prefix + command_name
+        command_name
         for command_name in all_command_names
     ]
-    text = f'@{message.user} ' + ' '.join(all_command_names)
+    general_command_names = [
+        self.command_prefix + command_name
+        for command_name in all_command_names
+        if command_name not in self.modonly_commands
+    ]
+    modonly_command_names = [
+        self.command_prefix + command_name
+        for command_name in all_command_names
+        if command_name in self.modonly_commands
+    ]
+    text = f'@{message.user} ' + \
+        'Commands: ' + ' '.join(general_command_names) + ' ' + \
+        'Mod-only commands: ' + ' '.join(modonly_command_names)
     self.send_privmsg(message.channel, text)
-
-
-def increment_bigbrain(self, message):
-    self.state['bigbrain_counter'] += 1
-    text = f'Big brain moments: {self.state["bigbrain_counter"]}'
-    self.send_privmsg(message.channel, text)
-    self.write_state()
-
-
-def increment_smallbrain(self, message):
-    self.state['smallbrain_counter'] += 1
-    text = f'Small brain moments: {self.state["smallbrain_counter"]}'
-    self.send_privmsg(message.channel, text)
-    self.write_state()
 
 
 def add_quote(self, message):
@@ -160,42 +157,3 @@ def get_weather(self, message):
     except Exception:
         print('Error while getting weather!')
         traceback.print_exc()
-
-
-def main():
-    custom_commands = {
-        'date': reply_with_date,
-        'bigbrain': increment_bigbrain,
-        'smallbrain': increment_smallbrain,
-        'cmds': list_commands,
-        'addcmd': add_template_command,
-        'editcmd': edit_template_command,
-        'delcmd': delete_template_command,
-        'addquote': add_quote,
-        'quote': reply_with_quote,
-        'weather': get_weather,
-    }
-    bot = Bot(
-        custom_commands=custom_commands,
-        oauth_token=config.OAUTH_TOKEN,
-        username='squishymcbotty',
-        command_prefix='!',
-        channels=['clumsycomputer'],
-        caps=[':twitch.tv/tags'],
-        state_filename='data/state.json',
-        state_schema={
-            'template_commands': {},
-            'bigbrain_counter': 0,
-            'smallbrain_counter': 0,
-            'quotes': [],
-        },
-        modonly_commands=[
-            'addcmd', 'editcmd', 'delcmd',
-            'addquote', 'noot',
-        ],
-    )
-    bot.init()
-
-
-if __name__ == '__main__':
-    main()
