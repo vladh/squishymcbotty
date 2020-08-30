@@ -20,6 +20,7 @@ class Bot:
         self, custom_commands, oauth_token, username, command_prefix,
         channels, state_filename, caps=[], state_schema={},
         modonly_commands=[], verbose=True,
+        event_handlers={},
     ):
         self.irc_server = 'irc.chat.twitch.tv'
         self.irc_port = 6697
@@ -34,6 +35,7 @@ class Bot:
         self.state_schema = state_schema
         self.custom_commands = custom_commands
         self.modonly_commands = modonly_commands
+        self.event_handlers = event_handlers
 
     def init(self):
         self.read_state()
@@ -182,6 +184,9 @@ class Bot:
         message = self.parse_message(received_msg)
         if self.verbose:
             print(f'> ({message.irc_command} {message.irc_args}) @{message.user}: {message.text}')
+
+        if 'on_message' in self.event_handlers:
+            self.event_handlers['on_message'](self, message)
 
         if message.irc_command == 'PING':
             self.send_command('PONG :tmi.twitch.tv')

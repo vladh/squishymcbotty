@@ -8,6 +8,14 @@ import config
 from util import remove_prefix
 
 
+PRINTER_SERIAL_PORT = '/dev/ttyS9'
+
+
+def send_message_to_printer(message):
+    with open(PRINTER_SERIAL_PORT, 'w') as f:
+        f.write(f'{message.user}: {message.text}\n')
+
+
 def reply_with_date(self, message):
     formatted_date = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
     text = f'Here you go {message.user}, the date is: {formatted_date}.'

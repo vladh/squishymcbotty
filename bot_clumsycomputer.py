@@ -17,6 +17,11 @@ def increment_smallbrain(self, message):
     self.write_state()
 
 
+def on_message(self, message):
+    if message.irc_command == 'PRIVMSG':
+        bot_common.send_message_to_printer(message)
+
+
 def main():
     custom_commands = {
         'date': bot_common.reply_with_date,
@@ -38,6 +43,9 @@ def main():
         channels=['clumsycomputer'],
         caps=[':twitch.tv/tags'],
         state_filename='data/state_clumsycomputer.json',
+        event_handlers={
+            'on_message': on_message,
+        },
         state_schema={
             'template_commands': {},
             'bigbrain_counter': 0,
