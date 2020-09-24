@@ -106,6 +106,28 @@ def list_commands(self, message):
     self.send_privmsg(message.channel, text)
 
 
+def add_to_join_list(self, message):
+    if message.user not in self.state['joinlist']:
+        self.state['joinlist'].append(message.user)
+    self.write_state()
+
+
+def get_random_joiner(self, message):
+    if len(self.state['joinlist']) > 0:
+        winner = random.choice(self.state['joinlist'])
+        text = f'@{message.user} The winner is… @{winner} !'
+    else:
+        text = f'@{message.user} No users in join list.'
+    self.send_privmsg(message.channel, text)
+
+
+def clear_join_list(self, message):
+    self.state['joinlist'] = []
+    self.write_state()
+    text = f'@{message.user} Join list cleared.'
+    self.send_privmsg(message.channel, text)
+
+
 def add_quote(self, message):
     if len(message.text_args) < 2:
         text = f"@{message.user} Usage: !addquote <quote>"

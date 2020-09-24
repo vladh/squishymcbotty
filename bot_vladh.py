@@ -13,6 +13,9 @@ def main():
         'addquote': bot_common.add_quote,
         'quote': bot_common.reply_with_quote,
         'weather': bot_common.get_weather,
+        'join': bot_common.add_to_join_list,
+        'clearjoinlist': bot_common.clear_join_list,
+        'getrandomjoiner': bot_common.get_random_joiner,
     }
     bot = Bot(
         custom_commands=custom_commands,
@@ -25,10 +28,12 @@ def main():
         state_schema={
             'template_commands': {},
             'quotes': [],
+            'joinlist': [],
         },
         modonly_commands=[
             'addcmd', 'editcmd', 'delcmd',
             'addquote', 'noot',
+            'clearjoinlist', 'getrandomjoiner',
         ],
     )
     bot.init()

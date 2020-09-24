@@ -3,6 +3,9 @@ from bot import Bot
 import bot_common
 
 
+IS_PRINTER_ENABLED = False
+
+
 def increment_bigbrain(self, message):
     self.state['bigbrain_counter'] += 1
     text = f'Big brain moments: {self.state["bigbrain_counter"]}'
@@ -18,7 +21,7 @@ def increment_smallbrain(self, message):
 
 
 def on_message(self, message):
-    if message.irc_command == 'PRIVMSG':
+    if IS_PRINTER_ENABLED and message.irc_command == 'PRIVMSG':
         bot_common.send_message_to_printer(message)
 
 
